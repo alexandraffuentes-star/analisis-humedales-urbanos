@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistema de Monitoreo Territorial</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- MapLibre GL JS -->
+    <link href="https://unpkg.com/maplibre-gl@4.3.2/dist/maplibre-gl.css" rel="stylesheet" />
+    <script src="https://unpkg.com/maplibre-gl@4.3.2/dist/maplibre-gl.js"></script>
+
+    <!-- Turf.js para análisis espacial (Auto-Zoom) -->
+    <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
+
+    <!-- Shapefile Export -->
+    <script src="https://unpkg.com/@mapbox/shp-write@latest/shpwrite.js"></script>
+    <!-- FileSaver.js para descarga de shapefiles -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+</head>
+<body class="bg-slate-950 text-slate-300 font-sans overflow-hidden">
+    
+    <div class="flex h-screen w-full">
+        
+        <!-- Panel Lateral -->
+        <aside class="w-1/4 flex flex-col p-6 backdrop-blur-md bg-white/5 border-r border-cyan-500/50 shadow-[4px_0_15px_#06b6d4] z-10 overflow-y-auto">
+            
+            <h1 class="font-mono text-2xl font-bold text-cyan-400 mb-8 tracking-widest drop-shadow-[0_0_8px_rgba(34,211,238,0.8)]">
+                SISTEMA DE MONITOREO TERRITORIAL
+            </h1>
+            
+            <div class="flex-grow">
+                <h2 class="font-mono text-lg text-fuchsia-400 mb-4 tracking-wider uppercase drop-shadow-[0_0_5px_rgba(232,121,249,0.8)]">
+                    Control de Capas
+                </h2>
+                
+                <div class="mb-6">
+                    <label class="block font-mono text-sm text-slate-300 mb-3">Atributo de Análisis:</label>
+                    <div class="flex flex-wrap gap-3" id="chip-container">
+                        <button class="filter-chip px-4 py-1.5 rounded-full backdrop-blur-md bg-white/5 border border-cyan-500/30 text-cyan-200 font-mono text-xs cursor-pointer transition-all duration-300 hover:bg-cyan-500/10 hover:border-cyan-400 hover:shadow-[0_0_8px_#22d3ee]" data-filter="ha" data-type="numeric">Hectáreas</button>
+                        <button class="filter-chip px-4 py-1.5 rounded-full backdrop-blur-md bg-white/5 border border-cyan-500/30 text-cyan-200 font-mono text-xs cursor-pointer transition-all duration-300 hover:bg-cyan-500/10 hover:border-cyan-400 hover:shadow-[0_0_8px_#22d3ee]" data-filter="comuna" data-type="text">Comuna</button>
+                        <button class="filter-chip px-4 py-1.5 rounded-full backdrop-blur-md bg-white/5 border border-cyan-500/30 text-cyan-200 font-mono text-xs cursor-pointer transition-all duration-300 hover:bg-cyan-500/10 hover:border-cyan-400 hover:shadow-[0_0_8px_#22d3ee]" data-filter="proceso_humedal_urbano" data-type="categorical">Proceso</button>
+                        <button class="filter-chip px-4 py-1.5 rounded-full backdrop-blur-md bg-white/5 border border-cyan-500/30 text-cyan-200 font-mono text-xs cursor-pointer transition-all duration-300 hover:bg-cyan-500/10 hover:border-cyan-400 hover:shadow-[0_0_8px_#22d3ee]" data-filter="resolucion" data-type="text">Resolución</button>
+                        <button class="filter-chip px-4 py-1.5 rounded-full backdrop-blur-md bg-white/5 border border-cyan-500/30 text-cyan-200 font-mono text-xs cursor-pointer transition-all duration-300 hover:bg-cyan-500/10 hover:border-cyan-400 hover:shadow-[0_0_8px_#22d3ee]" data-filter="nombre_humedal" data-type="text">Nombre</button>
+                    </div>
+                </div>
+
+                <!-- Controles Dinámicos -->
+                <div id="dynamic-controls" class="mt-4 hidden p-4 border border-cyan-500/20 bg-slate-900/50 backdrop-blur-sm">
+                    
+                    <!-- Búsqueda de Texto -->
+                    <div id="text-control" class="hidden">
+                        <label class="block font-mono text-xs text-slate-400 mb-2">Buscar valor (parcial):</label>
+                        <div class="flex gap-2">
+                            <input type="text" id="text-search-input" class="w-full bg-slate-950/80 border border-cyan-500/50 text-cyan-200 font-mono py-1.5 px-2 focus:outline-none focus:border-cyan-400 focus:shadow-[0_0_10px_#22d3ee] transition-all" placeholder="...">
+                            <button id="btn-search" class="bg-cyan-500/20 border border-cyan-400 text-cyan-50 font-mono px-3 py-1.5 hover:bg-cyan-400 hover:text-slate-900 transition-colors cursor-pointer active:scale-95">Buscar</button>
+                        </div>
+                    </div>
+
+                    <!-- Rango Numérico -->
+                    <div id="numeric-control" class="hidden">
+                        <label class="block font-mono text-xs text-slate-400 mb-2">Definir Rango:</label>
+                        <div class="flex gap-2 items-center">
+                            <input type="number" id="num-min" class="w-full bg-slate-950/80 border border-cyan-500/50 text-cyan-200 font-mono py-1.5 px-2 focus:outline-none focus:border-cyan-400 focus:shadow-[0_0_10px_#22d3ee]" placeholder="Mín">
+                            <span class="text-slate-400">-</span>
+                            <input type="number" id="num-max" class="w-full bg-slate-950/80 border border-cyan-500/50 text-cyan-200 font-mono py-1.5 px-2 focus:outline-none focus:border-cyan-400 focus:shadow-[0_0_10px_#22d3ee]" placeholder="Máx">
+                            <button id="btn-apply-num" class="bg-cyan-500/20 border border-cyan-400 text-cyan-50 font-mono px-3 py-1.5 hover:bg-cyan-400 hover:text-slate-900 transition-colors cursor-pointer active:scale-95">Aplicar</button>
+                        </div>
+                    </div>
+
+                    <!-- Categórico -->
+                    <div id="categorical-control" class="hidden flex gap-2">
+                        <button class="cat-btn flex-1 bg-slate-950/80 border border-cyan-500/50 text-cyan-200 font-mono py-2 hover:bg-cyan-500/20 hover:border-cyan-400 transition-colors cursor-pointer active:scale-95" data-val="Municipal">Municipal</button>
+                        <button class="cat-btn flex-1 bg-slate-950/80 border border-cyan-500/50 text-cyan-200 font-mono py-2 hover:bg-cyan-500/20 hover:border-cyan-400 transition-colors cursor-pointer active:scale-95" data-val="de Oficio">De Oficio</button>
+                    </div>
+                </div>
+
+                <!-- Botón Limpiar Filtros -->
+                <button id="btn-clear-filters" class="hidden mt-4 w-full border border-fuchsia-500/50 text-fuchsia-400 font-mono py-1.5 hover:bg-fuchsia-500/10 transition-colors cursor-pointer text-sm">Limpiar Filtros</button>
+
+            </div>
+
+            <!-- Sección Buffer -->
+            <div class="border-t border-cyan-500/20 pt-4 mb-4">
+                <h3 class="font-mono text-sm text-fuchsia-400 mb-3 tracking-wider uppercase">Herramienta Buffer</h3>
+                <div class="space-y-3">
+                    <div>
+                        <label class="font-mono text-xs text-slate-400 mb-1 block">Distancia (metros):</label>
+                        <input type="number" id="buffer-distance" value="100" min="1" class="w-full bg-slate-950/80 border border-cyan-500/50 text-cyan-200 font-mono py-1.5 px-2 focus:outline-none focus:border-cyan-400 focus:shadow-[0_0_10px_#22d3ee]">
+                    </div>
+                    <label class="flex items-center gap-2 cursor-pointer">
+                        <input type="checkbox" id="buffer-dissolve" checked class="w-4 h-4 accent-cyan-500 cursor-pointer">
+                        <span class="font-mono text-xs text-slate-300">Disolver (unir polígonos)</span>
+                    </label>
+                    <label class="flex items-center gap-2 cursor-pointer">
+                        <input type="checkbox" id="buffer-use-filter" checked class="w-4 h-4 accent-cyan-500 cursor-pointer">
+                        <span class="font-mono text-xs text-slate-300">Usar filtro actual</span>
+                    </label>
+                    <button id="btn-generate-buffer" class="w-full font-mono text-xs text-cyan-400 border border-cyan-500/50 bg-transparent py-2 hover:bg-cyan-500/10 transition-colors cursor-pointer active:scale-95">
+                        GENERAR BUFFER
+                    </button>
+                    <div id="buffer-download-section" class="hidden space-y-2">
+                        <button id="btn-download-geojson" class="w-full font-mono text-xs text-emerald-400 border border-emerald-500/50 bg-transparent py-1.5 hover:bg-emerald-500/10 transition-colors cursor-pointer active:scale-95">
+                            DESCARGAR GEOJSON
+                        </button>
+                        <button id="btn-download-shapefile" class="w-full font-mono text-xs text-amber-400 border border-amber-500/50 bg-transparent py-1.5 hover:bg-amber-500/10 transition-colors cursor-pointer active:scale-95">
+                            DESCARGAR SHAPEFILE
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Botón de Acción Cyberpunk -->
+            <button id="init-map-btn" class="mt-8 w-full font-mono text-cyan-400 border-2 border-cyan-400 bg-transparent py-3 px-4 font-bold tracking-widest uppercase transition-all duration-300 hover:bg-cyan-400/10 hover:shadow-[0_0_20px_#22d3ee] active:scale-95 cursor-pointer">
+                INICIALIZAR MAPLIBRE
+            </button>
+            
+        </aside>
+
+        <!-- Contenedor Principal -->
+        <main class="w-3/4 relative bg-slate-900/50">
+            <div id="map" class="h-full w-full"></div>
+        </main>
+        
+    </div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        let map = null;
+        let geojsonData = null; // Memoria persistente para Auto-Zoom
+        let activeAttribute = null;
+        let activeType = null;
+        let lastMatchedFeatures = null;
+        let bufferResult = null;
+        let bufferLayerAdded = false;
+
+        const initBtn = document.getElementById('init-map-btn');
+        const dynamicControls = document.getElementById('dynamic-controls');
+        const textControl = document.getElementById('text-control');
+        const numericControl = document.getElementById('numeric-control');
+        const categoricalControl = document.getElementById('categorical-control');
+        const btnClearFilters = document.getElementById('btn-clear-filters');
+
+        // Función para volar (Auto-Zoom) a los límites de las features filtradas
+        function zoomToFeatures(features) {
+            if (!features || features.length === 0) return;
+            const collection = turf.featureCollection(features);
+            const bbox = turf.bbox(collection);
+            map.fitBounds(bbox, { padding: 50, maxZoom: 14, duration: 1500 });
+        }
+
+        // Función que aplica el filtro lógico y el estilo temático visual
+        function applyFilterAndStyle(filterCondition, matchedFeatures) {
+            lastMatchedFeatures = matchedFeatures;
+            // Aplicar el filtro condicional de visibilidad
+            map.setFilter('humedales-layer', filterCondition);
+
+            // Simbología Temática dinámica según el control usado
+            if (activeType === 'numeric') {
+                // Mapa Choropleth interpolado basado en Hectáreas reales
+                map.setPaintProperty('humedales-layer', 'fill-color', [
+                    'interpolate', ['linear'], ['get', 'ha'],
+                    0, '#06b6d4',      // Cyan (Muy pequeños)
+                    50, '#3b82f6',     // Azul
+                    200, '#8b5cf6',    // Violeta
+                    1000, '#d946ef',   // Fuchsia
+                    1800, '#f43f5e'    // Rojo Neón (Muy grandes)
+                ]);
+            } else if (activeAttribute === 'proceso_humedal_urbano') {
+                // Mapa categórico estricto
+                map.setPaintProperty('humedales-layer', 'fill-color', [
+                    'match', ['get', 'proceso_humedal_urbano'],
+                    'Municipal', '#22d3ee', // Cyan brillante
+                    'de Oficio', '#e879f9', // Fuchsia brillante
+                    '#334155'               // Fallback Gris
+                ]);
+            } else {
+                // Resaltar para búsqueda de texto
+                map.setPaintProperty('humedales-layer', 'fill-color', '#22d3ee');
+            }
+
+            zoomToFeatures(matchedFeatures);
+            btnClearFilters.classList.remove('hidden');
+        }
+
+        // Restaurar estado visual y espacial original
+        btnClearFilters.addEventListener('click', () => {
+            if (!map) return;
+            map.setFilter('humedales-layer', null);
+            map.setPaintProperty('humedales-layer', 'fill-color', '#06b6d4');
+            map.flyTo({ center: [-70.6693, -33.4489], zoom: 8, duration: 1500 });
+            btnClearFilters.classList.add('hidden');
+            
+            document.getElementById('text-search-input').value = '';
+            document.getElementById('num-min').value = '';
+            document.getElementById('num-max').value = '';
+            document.querySelectorAll('.cat-btn').forEach(btn => btn.classList.remove('bg-cyan-500/40', 'border-cyan-300'));
+            lastMatchedFeatures = null;
+            bufferLayerAdded = false;
+            document.getElementById('buffer-download-section').classList.add('hidden');
+        });
+
+        initBtn.addEventListener('click', () => {
+            if (map) return;
+
+            initBtn.textContent = 'CARGANDO DATOS...';
+            initBtn.classList.add('opacity-50', 'cursor-wait');
+
+            // Carga mediante Fetch (Soporta filtrado local y Auto-Zoom con Turf.js)
+            fetch('./Humedales_Urbanos.geojson')
+                .then(response => response.json())
+                .then(data => {
+                    geojsonData = data; // Almacenar en RAM
+
+                    map = new maplibregl.Map({
+                        container: 'map',
+                        style: 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json',
+                        center: [-70.6693, -33.4489],
+                        zoom: 8
+                    });
+
+                    map.on('load', () => {
+                        map.addSource('humedales', {
+                            type: 'geojson',
+                            data: geojsonData
+                        });
+
+                        map.addLayer({
+                            id: 'humedales-layer',
+                            type: 'fill',
+                            source: 'humedales',
+                            paint: {
+                                'fill-color': '#06b6d4',
+                                'fill-opacity': 0.7,
+                                'fill-outline-color': '#22d3ee'
+                            }
+                        });
+
+                        initBtn.textContent = 'SISTEMA EN LÍNEA';
+                        initBtn.classList.remove('cursor-wait');
+                        initBtn.classList.add('cursor-not-allowed', 'border-fuchsia-500', 'text-fuchsia-400');
+
+                        // Interacción con popups de lectura rápida
+                        map.on('click', 'humedales-layer', (e) => {
+                            const props = e.features[0].properties;
+                            new maplibregl.Popup()
+                                .setLngLat(e.lngLat)
+                                .setHTML(`<div class="font-mono text-slate-800 p-2"><strong>${props.nombre_humedal || 'Sin nombre'}</strong><br/>Comuna: ${props.comuna}<br/>Hectáreas: ${props.ha}<br/>Proceso: ${props.proceso_humedal_urbano}</div>`)
+                                .addTo(map);
+                        });
+
+                        map.on('mouseenter', 'humedales-layer', () => { map.getCanvas().style.cursor = 'pointer'; });
+                        map.on('mouseleave', 'humedales-layer', () => { map.getCanvas().style.cursor = ''; });
+
+                        // Logica principal de interacción de los Chips Neón
+                        const chips = document.querySelectorAll('.filter-chip');
+                        chips.forEach(chip => {
+                            chip.addEventListener('click', function() {
+                                const isActive = this.classList.contains('bg-cyan-500/20');
+                                
+                                chips.forEach(c => {
+                                    c.classList.remove('bg-cyan-500/20', 'border-cyan-400', 'shadow-[0_0_12px_#22d3ee]', 'text-cyan-50');
+                                    c.classList.add('bg-white/5', 'border-cyan-500/30', 'text-cyan-200');
+                                });
+                                
+                                dynamicControls.classList.add('hidden');
+                                textControl.classList.add('hidden');
+                                numericControl.classList.add('hidden');
+                                categoricalControl.classList.add('hidden');
+                                
+                                if (!isActive) {
+                                    this.classList.remove('bg-white/5', 'border-cyan-500/30', 'text-cyan-200');
+                                    this.classList.add('bg-cyan-500/20', 'border-cyan-400', 'shadow-[0_0_12px_#22d3ee]', 'text-cyan-50');
+                                    
+                                    activeAttribute = this.getAttribute('data-filter');
+                                    activeType = this.getAttribute('data-type');
+                                    
+                                    dynamicControls.classList.remove('hidden');
+                                    
+                                    if (activeType === 'text') textControl.classList.remove('hidden');
+                                    if (activeType === 'numeric') numericControl.classList.remove('hidden');
+                                    if (activeType === 'categorical') categoricalControl.classList.remove('hidden');
+                                } else {
+                                    activeAttribute = null;
+                                    activeType = null;
+                                }
+                            });
+                        });
+
+                        // Logica de Búsqueda de Texto con Botón (Auto-Zoom y Sub-Filtro)
+                        document.getElementById('btn-search').addEventListener('click', () => {
+                            const query = document.getElementById('text-search-input').value.toLowerCase().trim();
+                            if (!query || !activeAttribute) return;
+                            
+                            const matched = geojsonData.features.filter(f => {
+                                const val = f.properties[activeAttribute];
+                                return val && String(val).toLowerCase().includes(query);
+                            });
+
+                            if (matched.length > 0) {
+                                const matchedIds = matched.map(f => f.properties.objectid);
+                                const mlFilter = ['in', ['get', 'objectid'], ...matchedIds];
+                                applyFilterAndStyle(mlFilter, matched);
+                            } else {
+                                alert('No se encontraron humedales que coincidan con la búsqueda.');
+                            }
+                        });
+
+                        // Lógica de Rango Numérico Estricto (Simbología Choropleth)
+                        document.getElementById('btn-apply-num').addEventListener('click', () => {
+                            const minVal = parseFloat(document.getElementById('num-min').value);
+                            const maxVal = parseFloat(document.getElementById('num-max').value);
+                            
+                            if (isNaN(minVal) && isNaN(maxVal)) return;
+
+                            let filterExpr = ['all'];
+                            if (!isNaN(minVal)) filterExpr.push(['>=', ['get', activeAttribute], minVal]);
+                            if (!isNaN(maxVal)) filterExpr.push(['<=', ['get', activeAttribute], maxVal]);
+
+                            const matched = geojsonData.features.filter(f => {
+                                const val = parseFloat(f.properties[activeAttribute]);
+                                if (isNaN(val)) return false;
+                                let pass = true;
+                                if (!isNaN(minVal)) pass = pass && val >= minVal;
+                                if (!isNaN(maxVal)) pass = pass && val <= maxVal;
+                                return pass;
+                            });
+
+                            if (matched.length > 0) {
+                                applyFilterAndStyle(filterExpr, matched);
+                            } else {
+                                alert('No hay registros en este rango.');
+                            }
+                        });
+
+                        // Lógica de Atributo Categórico Rápido
+                        document.querySelectorAll('.cat-btn').forEach(btn => {
+                            btn.addEventListener('click', function() {
+                                document.querySelectorAll('.cat-btn').forEach(b => b.classList.remove('bg-cyan-500/40', 'border-cyan-300'));
+                                this.classList.add('bg-cyan-500/40', 'border-cyan-300');
+
+                                const val = this.getAttribute('data-val');
+                                const filterExpr = ['==', ['get', activeAttribute], val];
+                                
+                                const matched = geojsonData.features.filter(f => f.properties[activeAttribute] === val);
+                                
+                                if (matched.length > 0) applyFilterAndStyle(filterExpr, matched);
+                            });
+                        });
+
+                        // Buffer Event Listeners
+                        document.getElementById('btn-generate-buffer').addEventListener('click', generateBuffer);
+                        document.getElementById('btn-download-geojson').addEventListener('click', downloadGeoJSON);
+                        document.getElementById('btn-download-shapefile').addEventListener('click', downloadShapefile);
+                    });
+                })
+                .catch(err => {
+                    initBtn.textContent = 'ERROR DE CARGA';
+                    console.error("Error cargando GeoJSON:", err);
+                    alert("Por favor verifica que la url local http://localhost:8000 esté activa");
+                });
+        });
+
+        // Buffer Functions
+        function removeBufferLayer() {
+            if (bufferLayerAdded) {
+                try {
+                    if (map && map.getLayer('buffer-layer-fill')) map.removeLayer('buffer-layer-fill');
+                    if (map && map.getLayer('buffer-layer-outline')) map.removeLayer('buffer-layer-outline');
+                    if (map && map.getSource('buffer-source')) map.removeSource('buffer-source');
+                } catch (e) {}
+                bufferLayerAdded = false;
+            }
+        }
+
+        function dissolveTurf(fc) {
+            if (!fc || !fc.features || fc.features.length <= 1) return fc;
+            let result = fc.features[0];
+            for (let i = 1; i < fc.features.length; i++) {
+                try { result = turf.union(result, fc.features[i]); } catch (e) {}
+            }
+            return turf.featureCollection([result]);
+        }
+
+        function generateBuffer() {
+            if (!map || !geojsonData) { alert('Primero inicialice el mapa.'); return; }
+            const distance = parseFloat(document.getElementById('buffer-distance').value);
+            const dissolve = document.getElementById('buffer-dissolve').checked;
+            const useFilter = document.getElementById('buffer-use-filter').checked;
+            if (isNaN(distance) || distance <= 0) { alert('Ingrese una distancia v\u00e1lida en metros.'); return; }
+            let features;
+            if (useFilter && lastMatchedFeatures) {
+                features = lastMatchedFeatures;
+            } else {
+                features = geojsonData.features;
+            }
+            if (features.length === 0) { alert('No hay features disponibles.'); return; }
+            const fc = turf.featureCollection(features);
+            let buffered;
+            try {
+                buffered = turf.buffer(fc, distance, { units: 'meters' });
+            } catch (e) { alert('Error generando buffer: ' + e.message); return; }
+            if (!buffered || !buffered.features || buffered.features.length === 0) {
+                alert('No se pudo generar el buffer.'); return;
+            }
+            if (dissolve && buffered.features.length > 1) {
+                buffered = dissolveTurf(buffered);
+            }
+            bufferResult = buffered;
+            removeBufferLayer();
+            try {
+                map.addSource('buffer-source', { type: 'geojson', data: buffered });
+                map.addLayer({
+                    id: 'buffer-layer-fill',
+                    type: 'fill',
+                    source: 'buffer-source',
+                    paint: { 'fill-color': '#f59e0b', 'fill-opacity': 0.25, 'fill-outline-color': '#f59e0b' }
+                });
+                map.addLayer({
+                    id: 'buffer-layer-outline',
+                    type: 'line',
+                    source: 'buffer-source',
+                    paint: { 'line-color': '#f59e0b', 'line-width': 2, 'line-opacity': 0.8, 'line-dasharray': [4, 2] }
+                });
+                bufferLayerAdded = true;
+            } catch (e) {
+                alert('Error al agregar capa buffer: ' + e.message); return;
+            }
+            document.getElementById('buffer-download-section').classList.remove('hidden');
+            const bbox = turf.bbox(buffered);
+            map.fitBounds(bbox, { padding: 50, duration: 1000 });
+        }
+
+        function downloadGeoJSON() {
+            if (!bufferResult) return;
+            const blob = new Blob([JSON.stringify(bufferResult, null, 2)], { type: 'application/geo+json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'buffer_resultado.geojson';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        function downloadShapefile() {
+            if (!bufferResult) return;
+            if (typeof shpwrite === 'undefined' || typeof saveAs === 'undefined') {
+                alert('Las librer\u00edas Shapefile no est\u00e1n disponibles. Use la descarga GeoJSON.');
+                return;
+            }
+            try {
+                shpwrite.zip(bufferResult, { outputType: 'blob' }).then(function (blob) {
+                    saveAs(blob, 'buffer_resultado.zip');
+                }).catch(function (err) {
+                    alert('Error generando Shapefile: ' + err.message);
+                });
+            } catch (e) {
+                alert('Error descargando Shapefile: ' + e.message);
+            }
+        }
+    });
+</script>
+
+</body>
+</html>
