@@ -450,8 +450,7 @@
                         });
 
                         buildRegionFilters(data);
-                        buildComunaFilters(data);
-                        buildNombreFilters(data);
+                        updateDependentFilters();
                         enableFilters();
                         applyFilters();
 
@@ -668,30 +667,56 @@
             ).join('');
         }
 
-        function buildComunaFilters(data) {
-            const comunas = [...new Set(data.features.map(f => f.properties.comuna).filter(Boolean))].sort();
-            document.getElementById('comuna-filters').innerHTML = comunas.map(c =>
-                `<label class="flex items-center gap-1.5 cursor-pointer hover:bg-slate-800/50 rounded px-1 py-0.5 transition-colors">
-                    <input type="checkbox" value="${c.replace(/"/g, '&quot;')}" class="accent-cyan-500 cursor-pointer">
-                    <span class="font-mono text-xs text-slate-300">${c}</span>
-                </label>`
-            ).join('');
-        }
+        function updateDependentFilters() {
+            if (!geojsonData) return;
+            const selectedRegions = [...document.querySelectorAll('#region-filters input:checked')].map(cb => cb.value);
+            
+            let regionFeatures = geojsonData.features;
+            if (selectedRegions.length > 0) {
+                regionFeatures = regionFeatures.filter(f => selectedRegions.includes(f.properties.region));
+            }
 
-        function buildNombreFilters(data) {
-            const nombres = [...new Set(data.features.map(f => f.properties.nombre_humedal).filter(Boolean))].sort();
-            document.getElementById('nombre-filters').innerHTML = nombres.map(n =>
-                `<label class="flex items-center gap-1.5 cursor-pointer hover:bg-slate-800/50 rounded px-1 py-0.5 transition-colors">
-                    <input type="checkbox" value="${n.replace(/"/g, '&quot;')}" class="accent-cyan-500 cursor-pointer">
+            const selectedComunas = [...document.querySelectorAll('#comuna-filters input:checked')].map(cb => cb.value);
+            
+            const comunas = [...new Set(regionFeatures.map(f => f.properties.comuna).filter(Boolean))].sort();
+            document.getElementById('comuna-filters').innerHTML = comunas.map(c => {
+                const isChecked = selectedComunas.includes(c) ? 'checked' : '';
+                return `<label class="flex items-center gap-1.5 cursor-pointer hover:bg-slate-800/50 rounded px-1 py-0.5 transition-colors">
+                    <input type="checkbox" value="${c.replace(/"/g, '&quot;')}" class="accent-cyan-500 cursor-pointer" ${isChecked}>
+                    <span class="font-mono text-xs text-slate-300">${c}</span>
+                </label>`;
+            }).join('');
+
+            const activeComunas = [...document.querySelectorAll('#comuna-filters input:checked')].map(cb => cb.value);
+
+            let comunaFeatures = regionFeatures;
+            if (activeComunas.length > 0) {
+                comunaFeatures = comunaFeatures.filter(f => activeComunas.includes(f.properties.comuna));
+            }
+
+            const selectedNombres = [...document.querySelectorAll('#nombre-filters input:checked')].map(cb => cb.value);
+
+            const nombres = [...new Set(comunaFeatures.map(f => f.properties.nombre_humedal).filter(Boolean))].sort();
+            document.getElementById('nombre-filters').innerHTML = nombres.map(n => {
+                const isChecked = selectedNombres.includes(n) ? 'checked' : '';
+                return `<label class="flex items-center gap-1.5 cursor-pointer hover:bg-slate-800/50 rounded px-1 py-0.5 transition-colors">
+                    <input type="checkbox" value="${n.replace(/"/g, '&quot;')}" class="accent-cyan-500 cursor-pointer" ${isChecked}>
                     <span class="font-mono text-xs text-slate-300 truncate" title="${n.replace(/"/g, '&quot;')}">${n}</span>
-                </label>`
-            ).join('');
+                </label>`;
+            }).join('');
+
+            document.querySelectorAll('#comuna-filters input').forEach(el => el.addEventListener('change', () => { 
+                updateDependentFilters(); 
+                applyFilters(); 
+            }));
+            document.querySelectorAll('#nombre-filters input').forEach(el => el.addEventListener('change', applyFilters));
         }
 
         function enableFilters() {
-            document.querySelectorAll('#region-filters input').forEach(el => el.addEventListener('change', applyFilters));
-            document.querySelectorAll('#comuna-filters input').forEach(el => el.addEventListener('change', applyFilters));
-            document.querySelectorAll('#nombre-filters input').forEach(el => el.addEventListener('change', applyFilters));
+            document.querySelectorAll('#region-filters input').forEach(el => el.addEventListener('change', () => {
+                updateDependentFilters();
+                applyFilters();
+            }));
             document.querySelectorAll('#proceso-filters button').forEach(btn => {
                 btn.addEventListener('click', () => {
                     btn.classList.toggle('active');
@@ -800,6 +825,8 @@
             removeBufferLayer();
             bufferResult = null;
             document.getElementById('buffer-download-section').classList.add('hidden');
+            
+            updateDependentFilters();
             applyFilters();
         }
 
