@@ -202,7 +202,6 @@
             text-transform: uppercase;
             letter-spacing: 1.2px;
             margin-bottom: 8px;
-            text-shadow: 0 0 4px rgba(217, 70, 239, 0.3);
         }
         .chart-card canvas {
             width: 100% !important;
@@ -230,12 +229,12 @@
         <aside class="w-1/4 flex flex-col p-6 backdrop-blur-md bg-white/5 border-r border-cyan-500/50 shadow-[4px_0_15px_#06b6d4] z-10">
             
             <!-- Título Principal -->
-            <h1 class="font-mono text-2xl font-bold text-cyan-400 mb-8 tracking-widest drop-shadow-[0_0_8px_rgba(34,211,238,0.8)]">
+            <h1 class="font-mono text-2xl font-bold text-cyan-400 mb-8 tracking-widest">
                 SISTEMA DE MONITOREO TERRITORIAL
             </h1>
             
             <!-- Sección: Control de Capas -->
-            <h2 class="font-mono text-lg text-fuchsia-400 mb-3 tracking-wider uppercase drop-shadow-[0_0_5px_rgba(232,121,249,0.8)]">
+            <h2 class="font-mono text-lg text-fuchsia-400 mb-3 tracking-wider uppercase">
                 Control de Capas
             </h2>
 
@@ -342,6 +341,11 @@
             <!-- Lienzo del mapa -->
             <div id="map" class="h-full w-full"></div>
 
+            <!-- Toggle Satelite -->
+            <button id="satellite-btn" style="position: absolute; top: 20px; left: 20px; z-index: 10; background: rgba(15, 23, 42, 0.85); border: 1px solid rgba(34, 211, 238, 0.4); color: #22d3ee; padding: 8px 16px; font-family: 'Courier New', monospace; font-weight: bold; border-radius: 6px; cursor: pointer; text-transform: uppercase; transition: all 0.3s ease;">
+                🌍 Mapa Satelital
+            </button>
+
             <!-- Botón flotante Gráficos -->
             <button id="charts-btn">📊 Gráficos</button>
 
@@ -398,6 +402,36 @@
             });
 
             map.on('load', () => {
+                // Add satellite raster
+                map.addSource('satellite', {
+                    type: 'raster',
+                    tiles: ['https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'],
+                    tileSize: 256
+                });
+                map.addLayer({
+                    id: 'satellite-layer',
+                    type: 'raster',
+                    source: 'satellite',
+                    layout: { visibility: 'none' }
+                });
+
+                // Toggle satellite logic
+                const satBtn = document.getElementById('satellite-btn');
+                satBtn.addEventListener('click', () => {
+                    const isSat = map.getLayoutProperty('satellite-layer', 'visibility') === 'visible';
+                    map.setLayoutProperty('satellite-layer', 'visibility', isSat ? 'none' : 'visible');
+                    satBtn.innerHTML = isSat ? '🌍 Mapa Satelital' : '🌑 Mapa Oscuro';
+                    if(!isSat) {
+                        satBtn.style.background = 'rgba(232, 121, 249, 0.2)';
+                        satBtn.style.borderColor = '#e879f9';
+                        satBtn.style.color = '#e879f9';
+                    } else {
+                        satBtn.style.background = 'rgba(15, 23, 42, 0.85)';
+                        satBtn.style.borderColor = 'rgba(34, 211, 238, 0.4)';
+                        satBtn.style.color = '#22d3ee';
+                    }
+                });
+
                 fetch('./Humedales_Urbanos.geojson')
                     .then(r => r.json())
                     .then(data => {
