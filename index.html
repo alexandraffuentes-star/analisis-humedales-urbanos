@@ -623,15 +623,10 @@
 
                                 map.on('click', 'sinader-layer', (e) => {
                                     const p = e.features[0].properties;
-                                    new maplibregl.Popup({ className: 'sinader-popup', maxWidth: '320px' })
+                                    new maplibregl.Popup({ className: 'sinader-popup', maxWidth: '280px' })
                                         .setLngLat(e.lngLat)
                                         .setHTML(`<div class="popup-content">
-                                            <div class="popup-title">${p.nombre_establecimiento || 'Sin nombre'}</div>
-                                            <div class="popup-subtitle">${p.razon_social}</div>
-                                            <div class="popup-divider"></div>
                                             <div class="popup-row"><span class="popup-label">Rubro</span><span class="popup-value">${p.rubro}</span></div>
-                                            <div class="popup-row"><span class="popup-label">Rol</span><span class="popup-value popup-rol">${p.rol || 'No especificado'}</span></div>
-                                            <div class="popup-divider"></div>
                                             <div class="popup-row"><span class="popup-label">Comuna</span><span class="popup-value">${p.comuna}</span></div>
                                             <div class="popup-row"><span class="popup-label">Región</span><span class="popup-value">${p.region}</span></div>
                                         </div>`)
